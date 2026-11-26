@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Session 04 Lab — Thẻ Đặt Lịch Khám & Auto Layout</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Nền lưới chấm mô phỏng không gian làm việc Figma */
+    .figma-canvas-bg {
+      background-color: #f1f5f9;
+      background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+
+    /* Highlight khung Auto Layout khi bật chế độ soi cấu trúc */
+    .inspect-active .al-node {
+      outline: 1px dashed rgba(37, 99, 235, 0.55);
+      outline-offset: -1px;
+      position: relative;
+    }
+    .inspect-active .al-node:hover {
+      outline: 1.5px solid #2563eb;
+      background-color: rgba(37, 99, 235, 0.03);
+    }
+    .inspect-active .al-badge {
+      display: inline-flex;
+    }
+    .al-badge {
+      display: none;
+    }
+
+    /* Thanh cuộn tinh gọn cho cây layer và bảng đối chiếu */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased min-h-screen flex flex-col">
+  <!-- Thanh điều hướng trên cùng -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
+          S04
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-base sm:text-lg font-bold text-slate-900 truncate">
+              Thẻ Đặt Lịch Khám Đa Khoa — Auto Layout &amp; Resizing
+            </h1>
+            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              Session 04
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 truncate">
+            Kiểm thử 360px / 480px • Quy ước tên layer <code class="font-mono text-slate-700">VaiTro/TenRieng</code> • Xuất JSON / SVG / HTML cho Figma
+          </p>
+        </div>
+      </div>
+
+      <!-- Nhóm nút thao tác nhanh & xuất file -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          id="btnToggleInspect"
+          type="button"
+          class="px-3 py-2 text-xs sm:text-sm font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer"
+          title="Hiển thị đường viền và nhãn Auto Layout trực tiếp trên thẻ"
+        >
+          <span>⊞</span>
+          <span>Soi Auto Layout</span>
+        </button>
+
+        <button
+          id="btnResetAll"
+          type="button"
+          class="px-3 py-2 text-xs sm:text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+        >
+          Khôi phục chuẩn đề
+        </button>
+
+        <div class="h-5 w-px bg-slate-200 hidden sm:block mx-0.5"></div>
+
+        <button
+          id="btnExportJson"
+          type="button"
+          class="px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition cursor-pointer"
+        >
+          Xuất JSON Figma
+        </button>
+        <button
+          id="btnExportSvg"
+          type="button"
+          class="px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition cursor-pointer"
+        >
+          Tải SVG
+        </button>
+        <button
+          id="btnExportHtml"
+          type="button"
+          class="px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 transition cursor-pointer"
+        >
+          Tải HTML
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Thông báo phản hồi (thay thế alert) -->
+  <div id="toastBanner" class="fixed bottom-5 right-5 z-50 hidden max-w-sm bg-slate-900 text-white text-xs sm:text-sm px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center justify-between gap-3">
+    <span id="toastMessage">Đã thực hiện thao tác.</span>
+    <button id="btnCloseToast" type="button" class="text-slate-400 hover:text-white font-bold px-1 cursor-pointer">✕</button>
+  </div>
+
+  <!-- Bố cục chính 3 cột trên desktop, xếp dọc linh hoạt trên tablet/mobile -->
+  <main class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5 flex-1 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+    <!-- CỘT TRÁI (4/12): Bảng điều khiển kiểm thử co giãn & quy tắc nghiệp vụ -->
+    <section class="xl:col-span-4 space-y-5">
+      <!-- Khối kiểm thử co giãn & chiều rộng -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide">1. Kiểm Thử Co Giãn &amp; Chiều Rộng</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Đổi 360px ↔ 480px hoặc nhập tên dài để kiểm tra tự xuống dòng</p>
+          </div>
+          <span class="text-xs font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-700">Hug Height</span>
+        </div>
+
+        <!-- Chọn kịch bản đang chỉnh sửa -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">Chọn kịch bản để kiểm thử trực tiếp</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              id="tabScenario1"
+              type="button"
+              class="py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer bg-blue-600 text-white border-blue-600"
+            >
+              <div>Kịch bản 1 (360px)</div>
+              <div class="text-[11px] font-normal opacity-90">Có BHYT • Còn 2/5 chỗ</div>
+            </button>
+            <button
+              id="tabScenario2"
+              type="button"
+              class="py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            >
+              <div>Kịch bản 2 (480px)</div>
+              <div class="text-[11px] font-normal text-slate-500">Không BHYT • Đủ 5/5 chỗ</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Chuyển nhanh chiều rộng 360px / 480px + thanh trượt -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label for="widthSlider" class="text-xs font-semibold text-slate-700">
+              Chiều rộng <code class="font-mono text-blue-700">Card/DoctorBooking</code> (Fixed)
+            </label>
+            <span id="currentWidthBadge" class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+              360px
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              id="btnWidth360"
+              type="button"
+              class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold border border-slate-300 hover:bg-slate-50 transition cursor-pointer"
+            >
+              360px (Mobile)
+            </button>
+            <button
+              id="btnWidth480"
+              type="button"
+              class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold border border-slate-300 hover:bg-slate-50 transition cursor-pointer"
+            >
+              480px (Tablet / Rộng)
+            </button>
+            <button
+              id="btnSwapWidths"
+              type="button"
+              class="py-2 px-3 rounded-lg text-xs font-semibold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition cursor-pointer"
+              title="Đảo chiều rộng 360px ↔ 480px giữa hai kịch bản"
+            >
+              ⇄ Đảo 2 thẻ
+            </button>
+          </div>
+
+          <input
+            id="widthSlider"
+            type="range"
+            min="320"
+            max="540"
+            step="4"
+            value="360"
+            class="w-full accent-blue-600 cursor-pointer"
+          />
+          <div class="flex justify-between text-[11px] font-mono text-slate-400">
+            <span>320px</span>
+            <span>360px</span>
+            <span>480px</span>
+            <span>540px</span>
+          </div>
+        </div>
+
+        <!-- Nhập tên bác sĩ dài bất kỳ -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <label for="doctorNameInput" class="text-xs font-semibold text-slate-700">
+              Tên bác sĩ (<code class="font-mono text-slate-600">Text/DoctorName</code>)
+            </label>
+            <button
+              id="btnLongNamePreset"
+              type="button"
+              class="text-[11px] font-semibold text-blue-600 hover:underline cursor-pointer"
+            >
+              + Chèn tên siêu dài
+            </button>
+          </div>
+          <textarea
+            id="doctorNameInput"
+            rows="2"
+            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Nhập họ tên, học hàm học vị bác sĩ..."
+          ></textarea>
+          <p class="text-[11px] text-slate-500">
+            Vùng chữ có <span class="font-semibold text-slate-700">Width: Fill container</span> &amp; <span class="font-semibold text-slate-700">Height: Hug contents</span> nên thẻ tự cao thêm, không tràn hay đè dòng.
+          </p>
+        </div>
+
+        <!-- Điều chỉnh trạng thái BHYT và số lượng đăng ký (0..5) để test quy tắc nghiệp vụ -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div>
+            <label for="hasInsuranceSelect" class="block text-xs font-semibold text-slate-700 mb-1">
+              Bảo hiểm y tế (BHYT)
+            </label>
+            <select
+              id="hasInsuranceSelect"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="true">Có BHYT (Giảm 80% → 40.000đ)</option>
+              <option value="false">Không có BHYT (200.000đ)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="bookedCountSelect" class="block text-xs font-semibold text-slate-700 mb-1">
+              Đã đăng ký (Tối đa 5)
+            </label>
+            <select
+              id="bookedCountSelect"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="0">0/5 (còn 5 chỗ)</option>
+              <option value="1">1/5 (còn 4 chỗ)</option>
+              <option value="2">2/5 (còn 3 chỗ)</option>
+              <option value="3">3/5 (còn 2 chỗ)</option>
+              <option value="4">4/5 (còn 1 chỗ)</option>
+              <option value="5">5/5 (Đã đầy — Khóa nút)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Khối quy tắc nghiệp vụ phòng khám -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-3">
+        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-2.5">
+          2. Quy Tắc Nghiệp Vụ Phòng Khám
+        </h2>
+        <ul class="space-y-2.5 text-xs text-slate-700 leading-relaxed">
+          <li class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span class="font-bold text-slate-900 block mb-0.5">Phí khám ban đầu: 200.000đ</span>
+            Có BHYT giảm 80% còn <span class="font-semibold text-blue-700">40.000đ</span> (kèm giá gốc 200.000đ ở kịch bản 1). Không có BHYT trả <span class="font-semibold text-slate-900">200.000đ</span> (không có giá gốc).
+          </li>
+          <li class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span class="font-bold text-slate-900 block mb-0.5">Sức chứa khung giờ: Tối đa 5 bệnh nhân</span>
+            Dưới 5 là còn chỗ (nút mở: <em>"Đặt lịch và lấy số thứ tự"</em>). Đủ <span class="font-semibold text-rose-700">5/5</span> là đã đầy và khóa đăng ký (nhãn nút: <em>"Khung giờ đã đầy"</em>).
+          </li>
+          <li class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80">
+            <span class="font-bold text-amber-950 block mb-0.5">Ưu tiên cấp số thứ tự sớm</span>
+            Người từ <span class="font-semibold">70 tuổi trở lên</span> và <span class="font-semibold">phụ nữ mang thai</span> được ưu tiên cấp số thứ tự sớm.
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CỘT GIỮA & PHẢI (8/12): Canvas hai kịch bản cạnh nhau + Cây layer + Bảng thông số -->
+    <section class="xl:col-span-8 space-y-5 min-w-0">
+      <!-- Khu vực hiển thị hai kịch bản đặt cạnh nhau trên cùng một trang -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide">
+              3. Bản Thiết Kế Hai Kịch Bản Cạnh Nhau (Trên Cùng Một Trang)
+            </h2>
+            <p class="text-xs text-slate-500">
+              Hai Frame độc lập (nhân bản rồi sửa), không dùng Component/Variant • Mọi Gap &amp; Padding là bội số của 8
+            </p>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+              Không tràn • Không đè chữ
+            </span>
+          </div>
+        </div>
+
+        <!-- Canvas chứa 2 thẻ -->
+        <div id="canvasStage" class="figma-canvas-bg p-4 sm:p-6 overflow-x-auto">
+          <div id="cardsRow" class="flex flex-wrap items-start justify-center gap-6 min-w-fit">
+            <!-- Thẻ kịch bản 1 và Thẻ kịch bản 2 được render bằng JS chuẩn cấu trúc Auto Layout -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid dưới: Cây layer chuẩn VaiTro/TenRieng + Bảng đối chiếu kích thước Figma -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <!-- Cây layer theo luồng đọc -->
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">4. Cây Layer (VaiTro/TenRieng)</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Sắp xếp theo luồng đọc từ trên xuống • Không tên mặc định</p>
+            </div>
+            <span id="layerTreeScenarioLabel" class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+              Kịch bản 1
+            </span>
+          </div>
+
+          <div id="layerTreeContainer" class="space-y-1.5 text-xs font-mono overflow-x-auto flex-1">
+            <!-- Cây layer render động -->
+          </div>
+        </div>
+
+        <!-- Bảng thông số Auto Layout & đối chiếu chiều rộng nội dung -->
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wide">5. Thông Số Auto Layout &amp; Đối Chiếu Đo Đạc</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Đối chiếu trực tiếp số đo thực tế của thẻ đang chọn với chuẩn đề bài</p>
+            </div>
+          </div>
+
+          <!-- Thẻ đo nhanh vùng nội dung & Column/DoctorMeta -->
+          <div id="measurementSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <!-- Render động -->
+          </div>
+
+          <!-- Bảng thông số từng layer -->
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 border-b border-slate-200">
+                  <th class="py-2 px-2.5 font-semibold">Layer</th>
+                  <th class="py-2 px-2.5 font-semibold">Direction</th>
+                  <th class="py-2 px-2.5 font-semibold">Gap</th>
+                  <th class="py-2 px-2.5 font-semibold">Padding</th>
+                  <th class="py-2 px-2.5 font-semibold">Resizing (W × H)</th>
+                </tr>
+              </thead>
+              <tbody id="specTableBody" class="divide-y divide-slate-100 font-mono text-[11px]">
+                <!-- Render động -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal / Drawer xem trước JSON Figma hoặc hướng dẫn nhập vào Figma -->
+  <div id="exportModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-[1px] p-4 flex items-center justify-center">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <h3 id="modalTitle" class="text-sm font-bold text-slate-900">Cấu Trúc JSON Thiết Kế (Figma Auto Layout)</h3>
+          <p id="modalSubtitle" class="text-xs text-slate-500">Bao gồm đầy đủ layer VaiTro/TenRieng, Auto Layout, Resizing và dữ liệu hai kịch bản</p>
+        </div>
+        <button id="btnCloseModal" type="button" class="text-slate-400 hover:text-slate-700 font-bold text-base px-2 py-1 cursor-pointer">✕</button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-1 bg-slate-950 text-emerald-300 font-mono text-xs leading-relaxed">
+        <pre id="modalCodeContent" class="whitespace-pre-wrap break-words"></pre>
+      </div>
+      <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
+        <span class="text-xs text-slate-600">
+          Mẹo: Tải file <strong>.json</strong>, <strong>.svg</strong> hoặc mở file <strong>.html</strong> trong trình duyệt để đối chiếu khi dựng trong Figma.
+        </span>
+        <div class="flex items-center gap-2">
+          <button id="btnCopyModalCode" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 cursor-pointer">
+            Sao chép nội dung
+          </button>
+          <button id="btnDownloadModalFile" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
+            Tải xuống tệp
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Dữ liệu chuẩn theo đề bài Session 04:
+     * - Kịch bản 1: 360px, BS.CKII Nguyễn Hoàng Minh, chuyên khoa Nội Tim mạch, 08:00 - 09:00, 3/5 (còn 2 chỗ), Có BHYT -> 40.000đ kèm giá gốc 200.000đ, nút mở "Đặt lịch và lấy số thứ tự"
+     * - Kịch bản 2: 480px, Thạc sĩ, Bác sĩ chuyên khoa II Nguyễn Hoàng Minh Quân, chuyên khoa Nội Tim mạch, 08:00 - 09:00, đủ 5/5, Không có BHYT -> 200.000đ không có giá gốc, nút khóa "Khung giờ đã đầy"
+     */
+    const INITIAL_SCENARIOS = [
+      {
+        id: 1,
+        label: 'Kịch bản 1',
+        width: 360,
+        doctorName: 'BS.CKII Nguyễn Hoàng Minh',
+        specialty: 'chuyên khoa Nội Tim mạch',
+        timeSlot: '08:00 - 09:00',
+        bookedCount: 3,
+        maxCapacity: 5,
+        hasInsurance: true,
+        baseFee: 200000,
+        discountedFee: 40000,
+        priorityNote: 'Ưu tiên cấp số: Người từ 70 tuổi trở lên và phụ nữ mang thai được cấp số thứ tự sớm.',
+        openButtonLabel: 'Đặt lịch và lấy số thứ tự',
+        lockedButtonLabel: 'Khung giờ đã đầy',
+        avatarInitials: 'MH',
+        avatarGradient: 'from-blue-600 to-cyan-500',
+      },
+      {
+        id: 2,
+        label: 'Kịch bản 2',
+        width: 480,
+        doctorName: 'Thạc sĩ, Bác sĩ chuyên khoa II Nguyễn Hoàng Minh Quân',
+        specialty: 'chuyên khoa Nội Tim mạch',
+        timeSlot: '08:00 - 09:00',
+        bookedCount: 5,
+        maxCapacity: 5,
+        hasInsurance: false,
+        baseFee: 200000,
+        discountedFee: 40000,
+        priorityNote: 'Ưu tiên cấp số: Người từ 70 tuổi trở lên và phụ nữ mang thai được cấp số thứ tự sớm.',
+        openButtonLabel: 'Đặt lịch và lấy số thứ tự',
+        lockedButtonLabel: 'Khung giờ đã đầy',
+        avatarInitials: 'MQ',
+        avatarGradient: 'from-indigo-600 to-blue-500',
+      },
+    ];
+
+    // Trạng thái ứng dụng
+    let scenarios = structuredClone(INITIAL_SCENARIOS);
+    let activeScenarioId = 1;
+    let inspectMode = true;
+    let modalPayload = { filename: '', content: '', mime: 'application/json' };
+
+    // Định dạng tiền tệ Việt Nam (ví dụ 200.000đ)
+    function formatVnd(amount) {
+      return amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
+    }
+
+    // Lấy kịch bản đang chọn để điều khiển
+    function getActiveScenario() {
+      return scenarios.find((s) => s.id === activeScenarioId) || scenarios[0];
+    }
+
+    // Hiển thị thông báo nhỏ góc màn hình
+    let toastTimer = null;
+    function showToast(message) {
+      const banner = document.getElementById('toastBanner');
+      const msgEl = document.getElementById('toastMessage');
+      msgEl.textContent = message;
+      banner.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 3200);
+    }
+
+    // Sinh chuỗi hiển thị số chỗ đăng ký theo quy tắc nghiệp vụ
+    function buildSlotStatusText(sc) {
+      const remaining = Math.max(0, sc.maxCapacity - sc.bookedCount);
+      if (sc.bookedCount >= sc.maxCapacity) {
+        return `${sc.timeSlot}, đã đủ ${sc.bookedCount}/${sc.maxCapacity}`;
+      }
+      return `${sc.timeSlot}, đã đăng ký ${sc.bookedCount}/${sc.maxCapacity} (còn ${remaining} chỗ)`;
+    }
+
+    // Sinh dữ liệu phí khám theo quy tắc BHYT
+    function buildFeeData(sc) {
+      if (sc.hasInsurance) {
+        return {
+          mainText: `Phí khám (Có BHYT -80%): ${formatVnd(sc.discountedFee)}`,
+          strikeText: formatVnd(sc.baseFee),
+          badgeText: 'BHYT -80%',
+        };
+      }
+      return {
+        mainText: `Phí khám (Không BHYT): ${formatVnd(sc.baseFee)}`,
+        strikeText: null,
+        badgeText: 'Không BHYT',
+      };
+    }
+
+    // Render toàn bộ giao diện
+    function renderAll() {
+      const canvasStage = document.getElementById('canvasStage');
+      if (inspectMode) {
+        canvasStage.classList.add('inspect-active');
+      } else {
+        canvasStage.classList.remove('inspect-active');
+      }
+
+      renderCardsRow();
+      syncControlsWithActiveScenario();
+      renderLayerTree();
+      renderMeasurementAndSpecs();
+    }
+
+    // Render hai thẻ kịch bản cạnh nhau trên cùng một trang
+    function renderCardsRow() {
+      const row = document.getElementById('cardsRow');
+      row.innerHTML = '';
+
+      scenarios.forEach((sc) => {
+        const isFull = sc.bookedCount >= sc.maxCapacity;
+        const isSelected = sc.id === activeScenarioId;
+        const slotText = buildSlotStatusText(sc);
+        const feeData = buildFeeData(sc);
+        const buttonLabel = isFull ? sc.lockedButtonLabel : sc.openButtonLabel;
+
+        // Khung bao ngoài của từng kịch bản trên canvas (không nằm trong cấu trúc layer của thẻ)
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex flex-col gap-2.5 shrink-0';
+
+        // Thanh nhãn kịch bản phía trên thẻ để dễ nhận biết & chọn nhanh
+        const headerBar = document.createElement('div');
+        headerBar.className = 'flex items-center justify-between gap-2 px-1';
+        headerBar.innerHTML = `
+          <button
+            type="button"
+            data-select-scenario="${sc.id}"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+              isSelected
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+            }"
+          >
+            <span>${sc.label}</span>
+            <span class="font-mono opacity-85">(${sc.width}px)</span>
+          </button>
+          <span class="text-[11px] font-mono text-slate-500">
+            Hug Height • ${isFull ? 'Khóa' : 'Mở'}
+          </span>
+        `;
+        wrapper.appendChild(headerBar);
+
+        // =========================================================================
+        // 1. Card/DoctorBooking: Auto Layout Vertical, Gap 16px, Padding 16px (4 cạnh)
+        //    Resizing: Fixed {width}px x Hug contents | Nền trắng, bo góc 8px, viền 1px
+        // =========================================================================
+        const card = document.createElement('article');
+        card.id = `card-scenario-${sc.id}`;
+        card.setAttribute('data-layer-name', 'Card/DoctorBooking');
+        card.className = `al-node bg-white rounded-[8px] border flex flex-col gap-[16px] p-[16px] transition-shadow ${
+          isSelected ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md' : 'border-slate-300 shadow-sm'
+        }`;
+        card.style.width = `${sc.width}px`;
+        card.style.height = 'auto'; // Hug contents
+
+        // Nhãn soi layer góc trên phải
+        const cardBadge = document.createElement('span');
+        cardBadge.className = 'al-badge self-end -mt-2 -mr-1 text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-600 text-white';
+        cardBadge.textContent = 'Card/DoctorBooking • V • gap 16 • p 16';
+        card.appendChild(cardBadge);
+
+        // -----------------------------------------------------------------------
+        // 2. Row/DoctorProfile: Auto Layout Horizontal, Gap 16px, Padding 0px
+        //    Resizing: Fill container x Hug contents
+        // -----------------------------------------------------------------------
+        const rowProfile = document.createElement('div');
+        rowProfile.setAttribute('data-layer-name', 'Row/DoctorProfile');
+        rowProfile.className = 'al-node w-full flex flex-row items-start gap-[16px] p-0';
+
+        // 2a. Avatar/Doctor: Fixed 48px x Fixed 48px, hình tròn
+        const avatar = document.createElement('div');
+        avatar.setAttribute('data-layer-name', 'Avatar/Doctor');
+        avatar.className = `al-node w-[48px] h-[48px] rounded-full bg-gradient-to-br ${sc.avatarGradient} text-white font-bold text-sm flex items-center justify-center shrink-0 select-none shadow-xs`;
+        avatar.textContent = sc.avatarInitials;
+
+        // 2b. Column/DoctorMeta: Auto Layout Vertical, Gap 8px, Padding 0px
+        //     Resizing: Fill container x Hug contents
+        const colMeta = document.createElement('div');
+        colMeta.id = `meta-scenario-${sc.id}`;
+        colMeta.setAttribute('data-layer-name', 'Column/DoctorMeta');
+        colMeta.className = 'al-node flex-1 min-w-0 flex flex-col gap-[8px] p-0';
+
+        // Text/DoctorName (gợi ý 20px, Width Fill container, Height Hug contents)
+        const textDoctorName = document.createElement('h3');
+        textDoctorName.setAttribute('data-layer-name', 'Text/DoctorName');
+        textDoctorName.className = 'al-node w-full text-[20px] leading-[1.3] font-bold text-slate-900 break-words';
+        textDoctorName.textContent = sc.doctorName;
+
+        // Text/Specialty (gợi ý 16px, Width Fill container, Height Hug contents)
+        const textSpecialty = document.createElement('p');
+        textSpecialty.setAttribute('data-layer-name', 'Text/Specialty');
+        textSpecialty.className = 'al-node w-full text-[16px] leading-[1.4] font-medium text-slate-600 break-words';
+        textSpecialty.textContent = sc.specialty;
+
+        colMeta.appendChild(textDoctorName);
+        colMeta.appendChild(textSpecialty);
+
+        rowProfile.appendChild(avatar);
+        rowProfile.appendChild(colMeta);
+
+        // -----------------------------------------------------------------------
+        // 3. Box/AppointmentInfo: Auto Layout Vertical, Gap 8px, Padding 16px (4 cạnh)
+        //    Resizing: Fill container x Hug contents | Nền xám nhạt, bo góc 8px
+        // -----------------------------------------------------------------------
+        const boxInfo = document.createElement('div');
+        boxInfo.setAttribute('data-layer-name', 'Box/AppointmentInfo');
+        boxInfo.className = 'al-node w-full bg-slate-100 rounded-[8px] flex flex-col gap-[8px] p-[16px]';
+
+        // Text/SlotStatus (16px, Width Fill container, Height Hug contents)
+        const textSlotStatus = document.createElement('p');
+        textSlotStatus.setAttribute('data-layer-name', 'Text/SlotStatus');
+        textSlotStatus.className = `al-node w-full text-[16px] leading-[1.45] font-semibold break-words ${
+          isFull ? 'text-rose-700' : 'text-slate-900'
+        }`;
+        textSlotStatus.textContent = slotText;
+
+        // Text/InsuranceFee (16px, Width Fill container, Height Hug contents)
+        const textInsuranceFee = document.createElement('div');
+        textInsuranceFee.setAttribute('data-layer-name', 'Text/InsuranceFee');
+        textInsuranceFee.className = 'al-node w-full text-[16px] leading-[1.45] text-slate-800 break-words flex flex-wrap items-baseline gap-x-2 gap-y-1';
+
+        const feeMainSpan = document.createElement('span');
+        feeMainSpan.className = 'font-semibold text-slate-900';
+        feeMainSpan.textContent = feeData.mainText;
+        textInsuranceFee.appendChild(feeMainSpan);
+
+        if (feeData.strikeText) {
+          const strikeSpan = document.createElement('span');
+          strikeSpan.className = 'text-[14px] text-slate-400 line-through font-normal';
+          strikeSpan.textContent = `Giá gốc: ${feeData.strikeText}`;
+          textInsuranceFee.appendChild(strikeSpan);
+        }
+
+        // Text/PriorityNote (16px, Width Fill container, Height Hug contents)
+        const textPriorityNote = document.createElement('p');
+        textPriorityNote.setAttribute('data-layer-name', 'Text/PriorityNote');
+        textPriorityNote.className = 'al-node w-full text-[16px] leading-[1.45] text-slate-700 break-words';
+        textPriorityNote.textContent = sc.priorityNote;
+
+        boxInfo.appendChild(textSlotStatus);
+        boxInfo.appendChild(textInsuranceFee);
+        boxInfo.appendChild(textPriorityNote);
+
+        // -----------------------------------------------------------------------
+        // 4. Button/Book: Auto Layout Horizontal, Gap 0px, Padding 16px (trái/phải)
+        //    Resizing: Fill container x Fixed 48px | Căn giữa chữ nhãn nút
+        // -----------------------------------------------------------------------
+        const btnBook = document.createElement('button');
+        btnBook.type = 'button';
+        btnBook.setAttribute('data-layer-name', 'Button/Book');
+        btnBook.disabled = isFull;
+        btnBook.className = `al-node w-full h-[48px] px-[16px] py-0 gap-0 rounded-[8px] flex items-center justify-center transition cursor-pointer ${
+          isFull
+            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+        }`;
+
+        const textButtonLabel = document.createElement('span');
+        textButtonLabel.setAttribute('data-layer-name', 'Text/ButtonLabel');
+        textButtonLabel.className = 'al-node text-[16px] leading-[1.2] font-semibold text-center truncate';
+        textButtonLabel.textContent = buttonLabel;
+
+        btnBook.appendChild(textButtonLabel);
+        btnBook.addEventListener('click', () => {
+          if (!isFull) {
+            showToast(`Đã chọn đặt lịch (${sc.label}): ${sc.doctorName} — ${feeData.badgeText}`);
+          }
+        });
+
+        // Gắn các khối con vào Card/DoctorBooking theo đúng thứ tự đọc từ trên xuống
+        card.appendChild(rowProfile);
+        card.appendChild(boxInfo);
+        card.appendChild(btnBook);
+
+        wrapper.appendChild(card);
+        row.appendChild(wrapper);
+      });
+
+      // Gắn sự kiện chọn kịch bản trên thanh nhãn của từng thẻ
+      row.querySelectorAll('[data-select-scenario]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          activeScenarioId = Number(btn.getAttribute('data-select-scenario'));
+          renderAll();
+        });
+      });
+    }
+
+    // Đồng bộ các ô điều khiển với kịch bản đang chọn
+    function syncControlsWithActiveScenario() {
+      const sc = getActiveScenario();
+      const tab1 = document.getElementById('tabScenario1');
+      const tab2 = document.getElementById('tabScenario2');
+
+      if (sc.id === 1) {
+        tab1.className = 'py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer bg-blue-600 text-white border-blue-600';
+        tab2.className = 'py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+      } else {
+        tab2.className = 'py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer bg-blue-600 text-white border-blue-600';
+        tab1.className = 'py-2 px-3 rounded-xl text-xs font-semibold border transition text-left cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+      }
+
+      document.getElementById('widthSlider').value = sc.width;
+      document.getElementById('currentWidthBadge').textContent = `${sc.width}px`;
+      document.getElementById('doctorNameInput').value = sc.doctorName;
+      document.getElementById('hasInsuranceSelect').value = String(sc.hasInsurance);
+      document.getElementById('bookedCountSelect').value = String(sc.bookedCount);
+      document.getElementById('layerTreeScenarioLabel').textContent = `${sc.label} (${sc.width}px)`;
+    }
+
+    // Render cây layer chuẩn VaiTro/TenRieng theo luồng đọc từ trên xuống
+    function renderLayerTree() {
+      const container = document.getElementById('layerTreeContainer');
+      const treeItems = [
+        { name: 'Card/DoctorBooking', depth: 0, meta: 'Auto Layout • Vertical' },
+        { name: 'Row/DoctorProfile', depth: 1, meta: 'Auto Layout • Horizontal' },
+        { name: 'Avatar/Doctor', depth: 2, meta: 'Fixed 48×48' },
+        { name: 'Column/DoctorMeta', depth: 2, meta: 'Auto Layout • Vertical' },
+        { name: 'Text/DoctorName', depth: 3, meta: 'Fill W • Hug H' },
+        { name: 'Text/Specialty', depth: 3, meta: 'Fill W • Hug H' },
+        { name: 'Box/AppointmentInfo', depth: 1, meta: 'Auto Layout • Vertical' },
+        { name: 'Text/SlotStatus', depth: 2, meta: 'Fill W • Hug H' },
+        { name: 'Text/InsuranceFee', depth: 2, meta: 'Fill W • Hug H' },
+        { name: 'Text/PriorityNote', depth: 2, meta: 'Fill W • Hug H' },
+        { name: 'Button/Book', depth: 1, meta: 'Auto Layout • H 48px' },
+        { name: 'Text/ButtonLabel', depth: 2, meta: 'Centered' },
+      ];
+
+      container.innerHTML = treeItems
+        .map((item, idx) => {
+          const padLeft = item.depth * 16 + 8;
+          const isText = item.name.startsWith('Text/');
+          const isFrame = item.name.startsWith('Card/') || item.name.startsWith('Row/') || item.name.startsWith('Column/') || item.name.startsWith('Box/') || item.name.startsWith('Button/');
+          return `
+            <div style="padding-left: ${padLeft}px" class="pr-2 py-1.5 rounded-lg hover:bg-slate-50 flex items-center justify-between gap-2 border border-transparent hover:border-slate-200 transition">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-[10px] text-slate-400 select-none">${String(idx + 1).padStart(2, '0')}</span>
+                <span class="text-[11px] px-1 rounded ${
+                  isFrame
+                    ? 'bg-blue-50 text-blue-700 font-semibold'
+                    : isText
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700'
+                }">${isFrame ? 'AL' : isText ? 'T' : 'IMG'}</span>
+                <span class="text-slate-800 font-medium truncate">${item.name}</span>
+              </div>
+              <span class="text-[10px] text-slate-400 shrink-0">${item.meta}</span>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    // Render thông số đo chiều rộng nội dung & bảng thông số từng layer
+    function renderMeasurementAndSpecs() {
+      const sc = getActiveScenario();
+      // Vùng nội dung Card: Width - 32px (padding trái 16px + phải 16px)
+      const contentWidth = sc.width - 32;
+      // Khối Column/DoctorMeta: contentWidth - 48px (Avatar) - 16px (Gap Row/DoctorProfile)
+      const doctorMetaWidth = contentWidth - 48 - 16;
+
+      // Đo chiều cao thực tế của thẻ đang chọn sau khi render
+      const cardEl = document.getElementById(`card-scenario-${sc.id}`);
+      const actualHeight = cardEl ? Math.round(cardEl.getBoundingClientRect().height) : 0;
+
+      const summaryEl = document.getElementById('measurementSummary');
+      summaryEl.innerHTML = `
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+          <div class="text-[11px] text-slate-500">Card Width</div>
+          <div class="font-mono font-bold text-slate-900 mt-0.5">${sc.width}px</div>
+        </div>
+        <div class="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200">
+          <div class="text-[11px] text-blue-700">Vùng nội dung</div>
+          <div class="font-mono font-bold text-blue-900 mt-0.5">${contentWidth}px</div>
+        </div>
+        <div class="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200">
+          <div class="text-[11px] text-indigo-700">DoctorMeta W</div>
+          <div class="font-mono font-bold text-indigo-900 mt-0.5">${doctorMetaWidth}px</div>
+        </div>
+        <div class="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
+          <div class="text-[11px] text-emerald-700">Chiều cao thực</div>
+          <div class="font-mono font-bold text-emerald-900 mt-0.5">${actualHeight}px</div>
+        </div>
+      `;
+
+      const rows = [
+        {
+          layer: 'Card/DoctorBooking',
+          dir: 'Vertical',
+          gap: '16px',
+          pad: '16px (4 cạnh)',
+          resize: `Fixed ${sc.width}px × Hug`,
+        },
+        {
+          layer: 'Row/DoctorProfile',
+          dir: 'Horizontal',
+          gap: '16px',
+          pad: '0px',
+          resize: 'Fill × Hug',
+        },
+        {
+          layer: 'Avatar/Doctor',
+          dir: '—',
+          gap: '—',
+          pad: '—',
+          resize: 'Fixed 48px × Fixed 48px',
+        },
+        {
+          layer: 'Column/DoctorMeta',
+          dir: 'Vertical',
+          gap: '8px',
+          pad: '0px',
+          resize: 'Fill × Hug',
+        },
+        {
+          layer: 'Box/AppointmentInfo',
+          dir: 'Vertical',
+          gap: '8px',
+          pad: '16px (4 cạnh)',
+          resize: 'Fill × Hug',
+        },
+        {
+          layer: 'Button/Book',
+          dir: 'Horizontal',
+          gap: '0px',
+          pad: '16px (trái/phải)',
+          resize: 'Fill × Fixed 48px',
+        },
+        {
+          layer: 'Text/* (6 lớp chữ)',
+          dir: '—',
+          gap: '—',
+          pad: '—',
+          resize: 'Fill W × Hug H',
+        },
+      ];
+
+      document.getElementById('specTableBody').innerHTML = rows
+        .map(
+          (r) => `
+          <tr class="hover:bg-slate-50/80">
+            <td class="py-2 px-2.5 font-semibold text-slate-800">${r.layer}</td>
+            <td class="py-2 px-2.5 text-slate-600">${r.dir}</td>
+            <td class="py-2 px-2.5 text-slate-600">${r.gap}</td>
+            <td class="py-2 px-2.5 text-slate-600">${r.pad}</td>
+            <td class="py-2 px-2.5 text-blue-700 font-medium">${r.resize}</td>
+          </tr>
+        `
+        )
+        .join('');
+    }
+
+    // Tạo dữ liệu JSON chuẩn cấu trúc Auto Layout & VaiTro/TenRieng cho Figma
+    function buildFigmaJsonExport() {
+      const payload = {
+        schema: 'session04-doctor-booking-autolayout-v1',
+        exportedAt: new Date().toISOString(),
+        namingConvention: 'VaiTro/TenRieng (PascalCase)',
+        spacingUnitMultipleOf: 8,
+        businessRules: {
+          baseFeeVnd: 200000,
+          insuranceDiscountRate: 0.8,
+          insuranceFeeVnd: 40000,
+          maxCapacityPerSlot: 5,
+          priorityGroups: ['Người từ 70 tuổi trở lên', 'Phụ nữ mang thai'],
+        },
+        scenarios: scenarios.map((sc) => {
+          const isFull = sc.bookedCount >= sc.maxCapacity;
+          return {
+            scenarioId: sc.id,
+            scenarioLabel: sc.label,
+            rootFrame: {
+              name: 'Card/DoctorBooking',
+              type: 'FRAME',
+              layoutMode: 'VERTICAL',
+              itemSpacing: 16,
+              padding: { top: 16, right: 16, bottom: 16, left: 16 },
+              layoutSizingHorizontal: 'FIXED',
+              layoutSizingVertical: 'HUG',
+              width: sc.width,
+              cornerRadius: 8,
+              strokeWeight: 1,
+              children: [
+                {
+                  name: 'Row/DoctorProfile',
+                  type: 'FRAME',
+                  layoutMode: 'HORIZONTAL',
+                  itemSpacing: 16,
+                  padding: { top: 0, right: 0, bottom: 0, left: 0 },
+                  layoutSizingHorizontal: 'FILL',
+                  layoutSizingVertical: 'HUG',
+                  children: [
+                    {
+                      name: 'Avatar/Doctor',
+                      type: 'FRAME',
+                      layoutSizingHorizontal: 'FIXED',
+                      layoutSizingVertical: 'FIXED',
+                      width: 48,
+                      height: 48,
+                      cornerRadius: 999,
+                    },
+                    {
+                      name: 'Column/DoctorMeta',
+                      type: 'FRAME',
+                      layoutMode: 'VERTICAL',
+                      itemSpacing: 8,
+                      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+                      layoutSizingHorizontal: 'FILL',
+                      layoutSizingVertical: 'HUG',
+                      children: [
+                        {
+                          name: 'Text/DoctorName',
+                          type: 'TEXT',
+                          fontSize: 20,
+                          layoutSizingHorizontal: 'FILL',
+                          layoutSizingVertical: 'HUG',
+                          characters: sc.doctorName,
+                        },
+                        {
+                          name: 'Text/Specialty',
+                          type: 'TEXT',
+                          fontSize: 16,
+                          layoutSizingHorizontal: 'FILL',
+                          layoutSizingVertical: 'HUG',
+                          characters: sc.specialty,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'Box/AppointmentInfo',
+                  type: 'FRAME',
+                  layoutMode: 'VERTICAL',
+                  itemSpacing: 8,
+                  padding: { top: 16, right: 16, bottom: 16, left: 16 },
+                  layoutSizingHorizontal: 'FILL',
+                  layoutSizingVertical: 'HUG',
+                  cornerRadius: 8,
+                  children: [
+                    {
+                      name: 'Text/SlotStatus',
+                      type: 'TEXT',
+                      fontSize: 16,
+                      layoutSizingHorizontal: 'FILL',
+                      layoutSizingVertical: 'HUG',
+                      characters: buildSlotStatusText(sc),
+                    },
+                    {
+                      name: 'Text/InsuranceFee',
+                      type: 'TEXT',
+                      fontSize: 16,
+                      layoutSizingHorizontal: 'FILL',
+                      layoutSizingVertical: 'HUG',
+                      characters: buildFeeData(sc).mainText + (sc.hasInsurance ? ` (Giá gốc: ${formatVnd(sc.baseFee)})` : ''),
+                    },
+                    {
+                      name: 'Text/PriorityNote',
+                      type: 'TEXT',
+                      fontSize: 16,
+                      layoutSizingHorizontal: 'FILL',
+                      layoutSizingVertical: 'HUG',
+                      characters: sc.priorityNote,
+                    },
+                  ],
+                },
+                {
+                  name: 'Button/Book',
+                  type: 'FRAME',
+                  layoutMode: 'HORIZONTAL',
+                  itemSpacing: 0,
+                  padding: { top: 0, right: 16, bottom: 0, left: 16 },
+                  layoutSizingHorizontal: 'FILL',
+                  layoutSizingVertical: 'FIXED',
+                  height: 48,
+                  cornerRadius: 8,
+                  disabled: isFull,
+                  children: [
+                    {
+                      name: 'Text/ButtonLabel',
+                      type: 'TEXT',
+                      fontSize: 16,
+                      layoutSizingHorizontal: 'HUG',
+                      layoutSizingVertical: 'HUG',
+                      characters: isFull ? sc.lockedButtonLabel : sc.openButtonLabel,
+                    },
+                  ],
+                },
+              ],
+            },
+          };
+        }),
+      };
+      return JSON.stringify(payload, null, 2);
+    }
+
+    // Sinh tệp SVG trực quan chứa hai thẻ đặt cạnh nhau để mở/nhập tham chiếu trên Figma
+    function buildSvgExport() {
+      const gap = 32;
+      const padding = 24;
+      const card1W = scenarios[0].width;
+      const card2W = scenarios[1].width;
+
+      const el1 = document.getElementById('card-scenario-1');
+      const el2 = document.getElementById('card-scenario-2');
+      const h1 = el1 ? Math.max(240, Math.round(el1.getBoundingClientRect().height)) : 280;
+      const h2 = el2 ? Math.max(240, Math.round(el2.getBoundingClientRect().height)) : 280;
+
+      const totalW = padding * 2 + card1W + gap + card2W;
+      const totalH = padding * 2 + Math.max(h1, h2) + 32;
+
+      const escapeXml = (str) =>
+        String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+      const renderSvgCard = (sc, x, y, w, h) => {
+        const isFull = sc.bookedCount >= sc.maxCapacity;
+        const fee = buildFeeData(sc);
+        const btnText = isFull ? sc.lockedButtonLabel : sc.openButtonLabel;
+        return `
+          <g id="Card-DoctorBooking-${sc.id}" transform="translate(${x}, ${y})">
+            <text x="0" y="-10" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#475569">${escapeXml(sc.label)} (${w}px)</text>
+            <rect width="${w}" height="${h}" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+            <g transform="translate(16, 16)">
+              <circle cx="24" cy="24" r="24" fill="#2563eb"/>
+              <text x="24" y="29" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${escapeXml(sc.avatarInitials)}</text>
+              <text x="64" y="20" font-family="Inter, sans-serif" font-size="16" font-weight="700" fill="#0f172a">${escapeXml(sc.doctorName)}</text>
+              <text x="64" y="42" font-family="Inter, sans-serif" font-size="13" fill="#475569">${escapeXml(sc.specialty)}</text>
+              <rect x="0" y="64" width="${w - 32}" height="${Math.max(96, h - 144)}" rx="8" fill="#f1f5f9"/>
+              <text x="16" y="88" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#0f172a">${escapeXml(buildSlotStatusText(sc))}</text>
+              <text x="16" y="110" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="#0f172a">${escapeXml(fee.mainText)}${fee.strikeText ? escapeXml(' (Giá gốc: ' + fee.strikeText + ')') : ''}</text>
+              <text x="16" y="132" font-family="Inter, sans-serif" font-size="12" fill="#334155">${escapeXml(sc.priorityNote)}</text>
+              <rect x="0" y="${h - 80}" width="${w - 32}" height="48" rx="8" fill="${isFull ? '#e2e8f0' : '#2563eb'}"/>
+              <text x="${(w - 32) / 2}" y="${h - 51}" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="${isFull ? '#64748b' : '#ffffff'}">${escapeXml(btnText)}</text>
+            </g>
+          </g>
+        `;
+      };
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">
+  <rect width="100%" height="100%" fill="#f1f5f9"/>
+  ${renderSvgCard(scenarios[0], padding, padding + 16, card1W, h1)}
+  ${renderSvgCard(scenarios[1], padding + card1W + gap, padding + 16, card2W, h2)}
+</svg>`;
+    }
+
+    // Mở modal xem trước & tải file
+    function openExportModal(title, subtitle, filename, content, mime) {
+      modalPayload = { filename, content, mime };
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalSubtitle').textContent = subtitle;
+      document.getElementById('modalCodeContent').textContent = content;
+      document.getElementById('exportModal').classList.remove('hidden');
+    }
+
+    function triggerDownload({ filename, content, mime }) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Đã tải xuống tệp ${filename}`);
+    }
+
+    // Đăng ký toàn bộ sự kiện tương tác
+    function bindEvents() {
+      document.getElementById('tabScenario1').addEventListener('click', () => {
+        activeScenarioId = 1;
+        renderAll();
+      });
+
+      document.getElementById('tabScenario2').addEventListener('click', () => {
+        activeScenarioId = 2;
+        renderAll();
+      });
+
+      document.getElementById('btnWidth360').addEventListener('click', () => {
+        const sc = getActiveScenario();
+        sc.width = 360;
+        renderAll();
+      });
+
+      document.getElementById('btnWidth480').addEventListener('click', () => {
+        const sc = getActiveScenario();
+        sc.width = 480;
+        renderAll();
+      });
+
+      document.getElementById('btnSwapWidths').addEventListener('click', () => {
+        const temp = scenarios[0].width;
+        scenarios[0].width = scenarios[1].width;
+        scenarios[1].width = temp;
+        renderAll();
+        showToast(`Đã đảo chiều rộng: Kịch bản 1 (${scenarios[0].width}px) ↔ Kịch bản 2 (${scenarios[1].width}px)`);
+      });
+
+      document.getElementById('widthSlider').addEventListener('input', (e) => {
+        const sc = getActiveScenario();
+        sc.width = Number(e.target.value);
+        renderAll();
+      });
+
+      document.getElementById('doctorNameInput').addEventListener('input', (e) => {
+        const sc = getActiveScenario();
+        sc.doctorName = e.target.value;
+        renderAll();
+      });
+
+      document.getElementById('btnLongNamePreset').addEventListener('click', () => {
+        const sc = getActiveScenario();
+        sc.doctorName = 'Phó Giáo sư, Tiến sĩ, Bác sĩ Chuyên khoa II Nguyễn Hoàng Minh Quân — Trưởng Đơn vị Tim Mạch Can Thiệp';
+        renderAll();
+        showToast('Đã chèn tên bác sĩ siêu dài để kiểm thử tự co giãn chiều cao');
+      });
+
+      document.getElementById('hasInsuranceSelect').addEventListener('change', (e) => {
+        const sc = getActiveScenario();
+        sc.hasInsurance = e.target.value === 'true';
+        renderAll();
+      });
+
+      document.getElementById('bookedCountSelect').addEventListener('change', (e) => {
+        const sc = getActiveScenario();
+        sc.bookedCount = Number(e.target.value);
+        renderAll();
+      });
+
+      document.getElementById('btnToggleInspect').addEventListener('click', () => {
+        inspectMode = !inspectMode;
+        renderAll();
+        showToast(inspectMode ? 'Đã bật chế độ soi khung Auto Layout' : 'Đã ẩn khung Auto Layout');
+      });
+
+      document.getElementById('btnResetAll').addEventListener('click', () => {
+        scenarios = structuredClone(INITIAL_SCENARIOS);
+        activeScenarioId = 1;
+        renderAll();
+        showToast('Đã khôi phục nguyên bản hai kịch bản theo đề bài');
+      });
+
+      document.getElementById('btnExportJson').addEventListener('click', () => {
+        const jsonStr = buildFigmaJsonExport();
+        openExportModal(
+          'Cấu Trúc JSON Thiết Kế (Figma Auto Layout)',
+          'Chứa đầy đủ thuộc tính Auto Layout, Resizing, tên layer VaiTro/TenRieng và 2 kịch bản',
+          'session04-doctor-booking-figma.json',
+          jsonStr,
+          'application/json'
+        );
+      });
+
+      document.getElementById('btnExportSvg').addEventListener('click', () => {
+        const svgStr = buildSvgExport();
+        openExportModal(
+          'Bản Vẽ SVG Hai Kịch Bản (Tham Chiếu Nhập Figma)',
+          'Kéo thả hoặc mở file .svg trên Figma để đối chiếu bố cục & chữ',
+          'session04-doctor-booking-scenarios.svg',
+          svgStr,
+          'image/svg+xml'
+        );
+      });
+
+      document.getElementById('btnExportHtml').addEventListener('click', () => {
+        const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+        triggerDownload({
+          filename: 'doctor-booking-autolayout-lab.html',
+          content: htmlContent,
+          mime: 'text/html',
+        });
+      });
+
+      document.getElementById('btnCloseModal').addEventListener('click', () => {
+        document.getElementById('exportModal').classList.add('hidden');
+      });
+
+      document.getElementById('exportModal').addEventListener('click', (e) => {
+        if (e.target.id === 'exportModal') {
+          document.getElementById('exportModal').classList.add('hidden');
+        }
+      });
+
+      document.getElementById('btnCopyModalCode').addEventListener('click', () => {
+        const text = document.getElementById('modalCodeContent').textContent;
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showToast('Đã sao chép nội dung vào clipboard');
+        } catch (err) {
+          showToast('Không thể sao chép tự động, hãy chọn thủ công');
+        }
+        document.body.removeChild(ta);
+      });
+
+      document.getElementById('btnDownloadModalFile').addEventListener('click', () => {
+        triggerDownload(modalPayload);
+      });
+
+      document.getElementById('btnCloseToast').addEventListener('click', () => {
+        document.getElementById('toastBanner').classList.add('hidden');
+      });
+    }
+
+    // Khởi tạo ứng dụng khi tải trang
+    window.addEventListener('DOMContentLoaded', () => {
+      bindEvents();
+      renderAll();
+    });
+  </script>
+</body>
+</html>
